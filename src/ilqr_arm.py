@@ -220,7 +220,6 @@ def run_ilqr(x0, target_trj, u_trj = None, max_iter=10, regu_init=10, lmbda=1e-1
     cost_trace = [total_cost]
     
     # Run main loop
-    t0 = time.time()
     for it in range(max_iter):
         # Backward and forward pass
         k_trj, K_trj = backward_pass_jit(x_trj, u_trj, target_trj, regu, lmbda)
@@ -235,7 +234,7 @@ def run_ilqr(x0, target_trj, u_trj = None, max_iter=10, regu_init=10, lmbda=1e-1
         
         #if it%1 == 0:
         #    print(it, total_cost, cost_redu)
-        dur = time.time() - t0
     return x_trj_new, u_trj_new, np.array(cost_trace)
 
 # To do: use scan and jit?. At least vmap the backward passes etc.
+run_ilqr_batch = vmap(run_ilqr, (0, 0, 0, None, None, None))
