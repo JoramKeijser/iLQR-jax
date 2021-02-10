@@ -92,9 +92,9 @@ params = data['params']
 C = np.asarray(params['C'])
 W = np.asarray(data['W'])
 hbar = np.asarray(data['hbar'])
+phi = lambda x: x #jax.nn.relu(x)
 
 def continuous_dynamics(x, inputs):
-    phi = lambda x: jax.nn.relu(x)
     tau = 150
     return (-x + W.dot(phi(x)) + inputs + hbar) / tau
 
