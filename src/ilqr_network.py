@@ -94,7 +94,7 @@ W = np.asarray(data['W'])
 hbar = np.asarray(data['hbar'])
 
 def continuous_dynamics(x, inputs):
-    phi = lambda x: x #relu(x)
+    phi = lambda x: relu(x)
     tau = 150
     return (-x + W.dot(phi(x)) + inputs + hbar) / tau
 
