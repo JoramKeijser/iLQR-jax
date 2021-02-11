@@ -5,23 +5,23 @@ from jax import vmap, jit
 from jax import jacfwd, jacrev
 import numpy as onp
 
-import time
 import pickle
+import time
 
 import network_and_arm
+import arm_model
 
 
-## Cost functions ## 
-
+# Cost functions
 def cost_stage(x, u, target, lmbda):
     """
     \|state - target\|^2 + lmbda \|u\|^2
-    x: (n_states,)
+    x: (n_states,) angles 
     u: (n_controls, )
     target: (n_states, ) -- To Do
     lmbda: float > 0, penalty on cost
     """
-    state_cost = np.sum((x[:2] - target)**2)
+    state_cost = np.sum((x[-4:-2] - target)**2)
     control_cost = np.sum(u**2)
     return state_cost + lmbda * control_cost
 
@@ -29,8 +29,8 @@ def cost_final(x, target):
     """
     \|state - target\|^2 
     """
-    return np.sum((x[:2] - target)**2)
-    
+    return np.sum((x[-4:-2] - target)**2)
+
 # Computes cost over trajectory of ln. (time steps, n_states)
 cost_stage_trj = vmap(cost_stage, in_axes=(0,0,0,None))
 # Cost of multiple trajectories: (batch size, time steps, n_states)
@@ -47,8 +47,7 @@ def cost_trj(x_trj, u_trj, target_trj, lmbda):
 cost_trj_batch = vmap(cost_trj, (0,0,0,None))
 
 
-### Derivatives ### 
-
+#  Gradients
 def cost_stage_grads(x, u, target, lmbda):
     """
     x: (n_states, )
@@ -85,53 +84,13 @@ def cost_final_grads(x, target):
 
 cost_final_grad_batch = vmap(cost_final_grads, in_axes=(0,0))
 
-# Dynamics
-# Data
-with open("../data/network_s972356.pickle", 'rb') as handle:
-    data = pickle.load(handle)
-params = data['params']
-C = np.asarray(params['C'])
-W = np.asarray(data['W'])
-hbar = np.asarray(data['hbar'])
-phi = lambda x: x #jax.nn.relu(x)
-
-def continuous_dynamics(x, inputs):
-    tau = 150
-    return (-x + W.dot(phi(x)) + inputs + hbar) / tau
-
-def discrete_dynamics(x, inputs):
-    # x: (neurons + 2, ), first two dims are readouts
-    dt = 1.0
-    y, h = x[:2], x[2:]
-    h = h + dt*continuous_dynamics(h, inputs)
-    y = h.dot(C)
-    x_new = np.concatenate((y, h))
-    return x_new, x_new
-
-def rollout(h0, inputs):
-    """
-    Require:
-        h0: network states (N, )
-        inputs: (time steps, N)
-    Return:
-        y: readout (time steps, 2)
-        h: rates (time steps, N)
-    """
-    x0 = np.concatenate((np.zeros((2, )), h0))
-    _, x = scan(discrete_dynamics, x0, inputs)
-    y, h = x[:,:2], x[:,2:]
-    return y, h
-
-rollout_jit = jit(rollout)
-rollout_batch = jit(vmap(rollout, (0, 0)))
-
 def dynamics_grads(x, u):
     """
     f: discrete dynamics x[t+1] = f(x[t], u[t])
     """
     def f(x,u):
         # Grab first output 
-        return discrete_dynamics(x,u)[0]
+        return network_and_arm.discrete_dynamics(x,u)[0]
     
     f_x, f_u = jacfwd(f, (0,1))(x,u)
     return f_x, f_u
@@ -186,7 +145,7 @@ def discrete_dynamics_affine(xs, inputs):
     ut, xt_new = xs[:200], xs[200:]
     xt, ut, kt, Kt = inputs
     ut_new = ut + kt + Kt@(xt_new - xt)
-    xt_new2 = discrete_dynamics(xt_new, ut_new)[0]
+    xt_new2 = network_and_arm.discrete_dynamics(xt_new, ut_new)[0]
     res = np.concatenate((ut_new, xt_new2))
     return res, res 
 
@@ -207,7 +166,6 @@ def forward_pass_scan(x_trj, u_trj, k_trj, K_trj):
 forward_pass_jit = jit(forward_pass_scan)
 # Batch over x, u, and feedback
 forward_pass_batch = jit(vmap(forward_pass_scan, (0,0,0,0))) 
-
 
 # Backward pass
 def step_back_scan(state, inputs, regu, lmbda):
@@ -246,7 +204,6 @@ def backward_pass_scan(x_trj, u_trj, target_trj, regu, lmbda):
 backward_pass_jit = jit(backward_pass_scan)
 
 
-
 def run_ilqr(x0, target_trj, u_trj = None, max_iter=10, regu_init=10, lmbda=1e-1):
     # Main loop
     # First forward rollout
@@ -254,8 +211,8 @@ def run_ilqr(x0, target_trj, u_trj = None, max_iter=10, regu_init=10, lmbda=1e-1
         N = target_trj.shape[0]
         n_u = 200
         u_trj = onp.random.normal(size=(N, n_u)) * 0.0001
-    y_trj, h_trj  = rollout(x0, u_trj)
-    x_trj = np.concatenate((y_trj, h_trj),1)
+    y_trj, h_trj, q_trj  = network_and_arm.rollout(x0, u_trj)
+    x_trj = np.concatenate((y_trj, h_trj, q_trj),1)
     total_cost = cost_trj(x_trj, u_trj, target_trj, lmbda).sum()
     regu = regu_init
     

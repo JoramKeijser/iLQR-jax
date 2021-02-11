@@ -52,7 +52,7 @@ def discrete_dynamics(x, m):
     x[t+1] = f(x[t], m[t])
     Fw Euler approximation of continuous dynamics
     """
-    dt = .1
+    dt = .01
     xnew = x + dt*continuous_dynamics(x, m)
     return xnew, xnew
 
