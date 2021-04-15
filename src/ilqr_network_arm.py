@@ -227,9 +227,11 @@ def run_ilqr(x0, target_trj, u_trj = None, max_iter=10, regu_init=10, lmbda=1e-1
         total_cost = cost_trj(x_trj_new, u_trj_new, target_trj, lmbda).sum()
         t1 = time.time()
         
-        # 
         cost_redu = cost_trace[-1] - total_cost
         cost_trace.append(total_cost)
+        # Still need to update, start from current guess
+        x_trj = x_trj_new
+        u_trj = u_trj_new
         
         #if it%1 == 0:
         #    print(it, total_cost, cost_redu)
