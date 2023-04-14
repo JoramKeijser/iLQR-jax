@@ -6,3 +6,10 @@ Optimize external inputs to a neural network model such that it controls a simpl
 * Optimizer: iterative linear quadratic regulator (iLQR). 
 
 Implementation in jax. Use`grad` to compute linear-quadratic approximation to system dynamics and cost function, and `vmap` to turn the local trajectory optimization into a slightly more global algorithm. 
+
+Dashed gray lines: targets, colored lines: optimized trajectories. 
+
+<figure>
+    <img src="ilqr.png"  />
+</figure>
+
